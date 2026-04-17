@@ -14,7 +14,7 @@ Battery_Aging::Battery_Aging(QWidget *parent)
     ui->setupUi(this);
     UI_Styling::applyShadow(this);
 
-    ui->textEdit->setPlaceholderText("메모를 입력하세요");
+    ui->Memo_box->setPlaceholderText("메모를 입력하세요");
 
     connect(ui->calendarWidget, &QCalendarWidget::clicked,
             this, &Battery_Aging::onDateSelected);
@@ -70,13 +70,13 @@ void Battery_Aging::onDateSelected(const QDate &date)
     {
         QJsonObject dayObj = noteMap[key];
 
-        ui->textEdit->setPlainText(dayObj["note"].toString());
+        ui->Memo_box->setPlainText(dayObj["note"].toString());
         ui->Cycle_time->setText(QString::number(dayObj["cycle"].toInt()));
         ui->Aging_time->setText(QString::number(dayObj["aging_hours"].toInt()));
     }
     else
     {
-        ui->textEdit->clear();
+        ui->Memo_box->clear();
         ui->Cycle_time->clear();
         ui->Aging_time->clear();
     }
@@ -117,7 +117,7 @@ void Battery_Aging::updateCalendarMarks()
     }
 }
 // 저장
-void Battery_Aging::on_pushButton_save_clicked()
+void Battery_Aging::on_Memo_Save_clicked()
 {
     if (!selectedDate.isValid())
         return;
@@ -125,7 +125,7 @@ void Battery_Aging::on_pushButton_save_clicked()
     QString key = selectedDate.toString("yyyy-MM-dd");
 
     QJsonObject dayObj;
-    dayObj["note"] = ui->textEdit->toPlainText();
+    dayObj["note"] = ui->Memo_box->toPlainText();
     dayObj["cycle"] = ui->Cycle_time->text().toInt();
     dayObj["aging_hours"] = ui->Aging_time->text().toInt();
 

@@ -20,7 +20,7 @@ public:
 
 private slots:
     void onDateSelected(const QDate &date);
-    void on_pushButton_save_clicked();
+    void on_Memo_Save_clicked();
 
 private:
     Ui::Battery_Aging *ui;
