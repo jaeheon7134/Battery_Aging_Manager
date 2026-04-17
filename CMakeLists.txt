@@ -23,6 +23,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(Battery_Aging_Plan
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        UI_Styling.cpp
+        UI_Styling.h
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET Battery_Aging_Plan APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

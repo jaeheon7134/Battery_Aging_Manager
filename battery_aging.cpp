@@ -1,5 +1,6 @@
 #include "battery_aging.h"
 #include "./ui_battery_aging.h"
+#include "UI_Styling.h"
 
 #include <QFile>
 #include <QJsonDocument>
@@ -11,8 +12,9 @@ Battery_Aging::Battery_Aging(QWidget *parent)
     , ui(new Ui::Battery_Aging)
 {
     ui->setupUi(this);
+    UI_Styling::applyShadow(this);   // ← 한 줄로 끝
 
-    ui->textEdit->setPlaceholderText("날짜를 선택하고 메모를 입력하세요");
+    ui->textEdit->setPlaceholderText("메모를 입력하세요");
 
     connect(ui->calendarWidget, &QCalendarWidget::clicked,
             this, &Battery_Aging::onDateSelected);
