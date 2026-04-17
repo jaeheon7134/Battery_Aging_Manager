@@ -1,5 +1,6 @@
 # Battery_Aging_Manager
 
-<img width="1046" height="833" alt="image" src="https://github.com/user-attachments/assets/38366b3e-5bfd-41e6-9799-3f7c4ed90165" />
+<img width="1233" height="862" alt="image" src="https://github.com/user-attachments/assets/42e2badc-0541-4343-a7d0-d16d277bc21f" />
+
 
 
