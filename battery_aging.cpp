@@ -12,7 +12,7 @@ Battery_Aging::Battery_Aging(QWidget *parent)
     , ui(new Ui::Battery_Aging)
 {
     ui->setupUi(this);
-    UI_Styling::applyShadow(this);   // ← 한 줄로 끝
+    UI_Styling::applyShadow(this);
 
     ui->textEdit->setPlaceholderText("메모를 입력하세요");
 
@@ -20,6 +20,7 @@ Battery_Aging::Battery_Aging(QWidget *parent)
             this, &Battery_Aging::onDateSelected);
 
     loadFromJson();
+    updateCalendarMarks();
     loadConfig();
     updateCurrentTime();
 }
@@ -80,7 +81,41 @@ void Battery_Aging::onDateSelected(const QDate &date)
         ui->Aging_time->clear();
     }
 }
+void Battery_Aging::updateCalendarMarks()
+{
+    ui->calendarWidget->setDateTextFormat(QDate(), QTextCharFormat());
 
+    for (auto it = noteMap.begin(); it != noteMap.end(); ++it)
+    {
+        QDate date = QDate::fromString(it.key(), "yyyy-MM-dd");
+        if (!date.isValid()) continue;
+
+        QJsonObject obj = it.value();
+
+
+        if (!obj.contains("aging_hours"))
+            continue;
+
+        int aging = obj["aging_hours"].toInt();
+
+        // 0이면 표시 안 함
+        if (aging == 0)
+            continue;
+
+        QTextCharFormat format;
+
+        if (aging < 8)
+        {
+            format.setBackground(QColor(255, 100, 100, 60)); // 빨강
+        }
+        else
+        {
+            format.setBackground(QColor(100, 180, 255, 50)); // 파랑
+        }
+
+        ui->calendarWidget->setDateTextFormat(date, format);
+    }
+}
 // 저장
 void Battery_Aging::on_pushButton_save_clicked()
 {
@@ -98,6 +133,7 @@ void Battery_Aging::on_pushButton_save_clicked()
 
     saveToJson();
     updateCurrentTime();
+    updateCalendarMarks();
 }
 
 // JSON 저장

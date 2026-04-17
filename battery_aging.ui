@@ -33,6 +33,12 @@
     <property name="firstDayOfWeek">
      <enum>Qt::DayOfWeek::Monday</enum>
     </property>
+    <property name="selectionMode">
+     <enum>QCalendarWidget::SelectionMode::SingleSelection</enum>
+    </property>
+    <property name="horizontalHeaderFormat">
+     <enum>QCalendarWidget::HorizontalHeaderFormat::ShortDayNames</enum>
+    </property>
    </widget>
    <widget class="QLineEdit" name="lineEdit_3">
     <property name="geometry">

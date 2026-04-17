@@ -35,6 +35,7 @@ private:
     void loadFromJson();
     void loadConfig();
     void updateCurrentTime();
+    void updateCalendarMarks();
 };
 
 #endif
