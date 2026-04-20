@@ -11,7 +11,6 @@
 #include <QLayout>
 #include <QPainter>
 
-// ⭐ Qt Charts 필수
 #include <QtCharts/QChartView>
 #include <QtCharts/QChart>
 #include <QtCharts/QLineSeries>
@@ -227,7 +226,6 @@ void Log_Analyize::init()
     QObject::connect(ui->CSV_Load_Btn, &QPushButton::clicked,
                      [=]() { openCSV(); });
 
-    // 🔥 여기 추가 (이벤트 연결 부분)
     QObject::connect(ui->File_List, &QListWidget::itemClicked,
                      [=](QListWidgetItem *item) {
 
@@ -253,10 +251,10 @@ void Log_Analyize::init()
     QObject::connect(ui->Graph_Clear_Btn, &QPushButton::clicked,
                      [=]() { clearGraph(); });
 
-    updateGraph();   // 초기 그래프 틀 생성
+    updateGraph();   
 }
 
-// 🔹 CSV 선택 → 리스트에 추가만
+
 void Log_Analyize::openCSV()
 {
     QString path = QFileDialog::getOpenFileName(
@@ -271,8 +269,6 @@ void Log_Analyize::openCSV()
     addFileToList(path);
 }
 
-
-// 🔹 리스트에 파일 추가
 
 
 void Log_Analyize::addFileToList(const QString &path)
@@ -331,69 +327,46 @@ void Log_Analyize::clearGraph()
 void Log_Analyize::loadCSV(const QString &filePath)
 {
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly))
-        return;
+    if (!file.open(QIODevice::ReadOnly)) return;
 
     QTextStream in(&file);
 
-    QString headerLine;
-    QStringList headers;
-    int idx_totalVolt = -1;
+    in.readLine(); // 1
+    in.readLine(); // 2
 
-    // 헤더 찾기
-    while (!in.atEnd())
+    QStringList parts = in.readLine().split(",");
+
+    int idx = -1;
+    for (int i = 0; i < parts.size(); ++i)
     {
-        headerLine = in.readLine();
-        headers = headerLine.split(",");
+        QString h = parts[i].toLower();
 
-        for (int i = 0; i < headers.size(); i++)
+        if (h.contains("total") && h.contains("volt"))
         {
-            QString h = headers[i].toLower();
-
-            if (h.contains("total") && h.contains("volt"))
-            {
-                idx_totalVolt = i;
-                break;
-            }
-        }
-
-        if (idx_totalVolt != -1)
+            idx = i;
             break;
+        }
     }
 
-    if (idx_totalVolt == -1)
-        return;
+    if (idx < 0) return;
 
-    int index = 0;
+    int row = 0;
 
+    // 2. 데이터는 바로 읽는다 (깔끔하게 가정)
     while (!in.atEnd())
     {
-        QString line = in.readLine();
-        if (line.isEmpty()) continue;
-
-        QStringList cols = line.split(",");
-
-        if (cols.size() <= idx_totalVolt)
-            continue;
-
-        QString raw = cols[idx_totalVolt];
-        raw.remove("V");
-        raw.remove("v");
-        raw = raw.trimmed();
+        QString raw = in.readLine().section(",", idx, idx).trimmed();
+        raw.remove("V", Qt::CaseInsensitive);
 
         bool ok;
         double value = raw.toDouble(&ok);
-
         if (!ok) continue;
 
-        xData.append(index++);
+        xData.append(row++);
         yData.append(value);
     }
 
-    file.close();
 }
-
-
 // 🔹 그래프 업데이트 함수 (핵심)
 
 void Log_Analyize::updateGraph()
