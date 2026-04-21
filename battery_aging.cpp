@@ -6,12 +6,17 @@
 #include <QJsonDocument>
 #include <QDebug>
 #include <QFileDialog>
+#include <QDir>
+#include <QSignalBlocker>
+#include <QStringConverter>
 #include <QTextStream>
+#include <functional>
 #include <QVBoxLayout>
 #include <QLayout>
 #include <QPainter>
 #include <QFont>
 #include <limits>
+#include <cmath>
 
 #include <QtCharts/QChartView>
 #include <QtCharts/QChart>
@@ -231,6 +236,9 @@ void Log_Analyize::init()
     QObject::connect(ui->CSV_Load_Btn, &QPushButton::clicked,
                      [=]() { openCSV(); });
 
+    QObject::connect(ui->CSV_Folder_Load_Btn, &QPushButton::clicked,
+                     [=]() { openCSVFolder(); });
+
     QObject::connect(ui->File_List, &QListWidget::itemClicked,
                      [=](QListWidgetItem *item) {
 
@@ -256,6 +264,91 @@ void Log_Analyize::init()
     QObject::connect(ui->Graph_Clear_Btn, &QPushButton::clicked,
                      [=]() { clearGraph(); });
 
+    // 조건 활성화 체크박스 → groupBox_Log_Condition enable/disable + 리스트 필터
+    ui->groupBox_Log_Condition->setEnabled(ui->CBox_Condition_ONOFF->isChecked());
+    QObject::connect(ui->CBox_Condition_ONOFF, &QCheckBox::toggled,
+                     [=](bool checked) {
+                         ui->groupBox_Log_Condition->setEnabled(checked);
+                         updateListFilter();
+                         updateGraph();
+                     });
+
+    // 온도 슬라이더 → label_7 에 현재 값 표시
+    ui->label_7->setText(QString::number(ui->Temp_Slider->value()) + " °C");
+    QObject::connect(ui->Temp_Slider, &QSlider::valueChanged,
+                     [=](int value) {
+                         ui->label_7->setText(QString::number(value) + " °C");
+                     });
+    QObject::connect(ui->Temp_Slider, &QSlider::sliderReleased,
+                     [=]() {
+                         updateListFilter();
+                         updateGraph();
+                     });
+
+    QObject::connect(ui->CbBox_Cycle_Count, &QComboBox::currentIndexChanged,
+                     [=](int) {
+                         updateListFilter();
+                         updateGraph();
+                     });
+
+    if (!ui->CBox_Charge->isChecked() && !ui->CBox_Discharge->isChecked() && !ui->CBox_All->isChecked())
+        ui->CBox_All->setChecked(true);
+
+    QObject::connect(ui->CBox_Charge, &QCheckBox::toggled,
+                     [=](bool checked) {
+                         QSignalBlocker blockCharge(ui->CBox_Charge);
+                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
+                         QSignalBlocker blockAll(ui->CBox_All);
+
+                         if (checked)
+                         {
+                             ui->CBox_Discharge->setChecked(false);
+                             ui->CBox_All->setChecked(false);
+                         }
+                         else if (!ui->CBox_Discharge->isChecked())
+                         {
+                             ui->CBox_All->setChecked(true);
+                         }
+
+                         updateGraph();
+                     });
+    QObject::connect(ui->CBox_Discharge, &QCheckBox::toggled,
+                     [=](bool checked) {
+                         QSignalBlocker blockCharge(ui->CBox_Charge);
+                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
+                         QSignalBlocker blockAll(ui->CBox_All);
+
+                         if (checked)
+                         {
+                             ui->CBox_Charge->setChecked(false);
+                             ui->CBox_All->setChecked(false);
+                         }
+                         else if (!ui->CBox_Charge->isChecked())
+                         {
+                             ui->CBox_All->setChecked(true);
+                         }
+
+                         updateGraph();
+                     });
+    QObject::connect(ui->CBox_All, &QCheckBox::toggled,
+                     [=](bool checked) {
+                         QSignalBlocker blockCharge(ui->CBox_Charge);
+                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
+                         QSignalBlocker blockAll(ui->CBox_All);
+
+                         if (checked)
+                         {
+                             ui->CBox_Charge->setChecked(false);
+                             ui->CBox_Discharge->setChecked(false);
+                         }
+                         else if (!ui->CBox_Charge->isChecked() && !ui->CBox_Discharge->isChecked())
+                         {
+                             ui->CBox_All->setChecked(true);
+                         }
+
+                         updateGraph();
+                     });
+
     updateGraph();
 }
 
@@ -272,6 +365,165 @@ void Log_Analyize::openCSV()
         return;
 
     addFileToList(path);
+    updateListFilter();
+    updateGraph();
+}
+
+void Log_Analyize::updateListFilter()
+{
+    const bool conditionEnabled = ui->CBox_Condition_ONOFF->isChecked(); 
+    const double targetTemp = static_cast<double>(ui->Temp_Slider->value());
+    const int targetCycle = ui->CbBox_Cycle_Count->currentText().toInt();
+    QSignalBlocker blockList(ui->File_List);
+
+    for (int i = 0; i < ui->File_List->count(); ++i)
+    {
+        QListWidgetItem *item = ui->File_List->item(i);
+        const QString path = fileMap.value(item->text());
+
+        if (!conditionEnabled)
+        {
+            item->setHidden(false);
+            continue;
+        }
+
+        const FileFilterMeta &meta = getFilterMeta(path);
+        const bool tempMatch = !meta.hasFirstTemp || std::abs(meta.firstTemp - targetTemp) < 1.0;
+        const bool cycleMatch = meta.hasRepeatColumn && meta.repeatTimes.contains(targetCycle);
+        const bool match = tempMatch && cycleMatch;
+        item->setHidden(!match);
+
+        // 조건 미충족 항목은 체크 해제
+        if (!match && item->checkState() == Qt::Checked)
+        {
+            item->setCheckState(Qt::Unchecked);
+            selectedFiles.remove(item->text());
+        }
+    }
+}
+
+const Log_Analyize::FileFilterMeta &Log_Analyize::getFilterMeta(const QString &filePath)
+{
+    auto it = filterMetaMap.find(filePath);
+    if (it == filterMetaMap.end())
+        it = filterMetaMap.insert(filePath, FileFilterMeta{});
+
+    FileFilterMeta &meta = it.value();
+    if (meta.parsed)
+        return meta;
+
+    meta.parsed = true;
+    meta.hasFirstTemp = false;
+    meta.firstTemp = 0.0;
+    meta.hasRepeatColumn = false;
+    meta.repeatTimes.clear();
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly))
+        return meta;
+
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::System);
+    in.readLine(); // line 1
+    in.readLine(); // line 2
+
+    const QStringList headers = in.readLine().split(",");
+    int tempIdx = -1;
+    int repeatIdx = -1;
+    for (int i = 0; i < headers.size(); ++i)
+    {
+        QString h = headers[i];
+        h.remove('"');
+        h = h.trimmed().toLower();
+        if (h.contains("battery") && h.contains("temp"))
+            tempIdx = i;
+        if (h.contains("repeat") && h.contains("time"))
+            repeatIdx = i;
+    }
+    meta.hasRepeatColumn = (repeatIdx >= 0);
+
+    while (!in.atEnd())
+    {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty())
+            continue;
+
+        if (tempIdx >= 0 && !meta.hasFirstTemp)
+        {
+            QString tempRaw = line.section(",", tempIdx, tempIdx).trimmed();
+            tempRaw.remove("C", Qt::CaseInsensitive);
+            tempRaw.remove("\u00B0");
+
+            bool okTemp = false;
+            const double tempVal = tempRaw.toDouble(&okTemp);
+            if (okTemp)
+            {
+                meta.hasFirstTemp = true;
+                meta.firstTemp = tempVal;
+            }
+        }
+
+        if (repeatIdx >= 0)
+        {
+            const QString repeatRaw = line.section(",", repeatIdx, repeatIdx).trimmed();
+            bool okRepeat = false;
+            const double repeatVal = repeatRaw.toDouble(&okRepeat);
+            if (okRepeat)
+                meta.repeatTimes.insert(static_cast<int>(std::lround(repeatVal)));
+        }
+
+    }
+
+    return meta;
+}
+
+bool Log_Analyize::matchesSelectedMode(const QString &modeValue)
+{
+    if (!ui->CBox_Condition_ONOFF->isChecked())
+        return true;
+
+    const bool chargeChecked = ui->CBox_Charge->isChecked();
+    const bool dischargeChecked = ui->CBox_Discharge->isChecked();
+    const bool allChecked = ui->CBox_All->isChecked();
+
+    if (allChecked || chargeChecked == dischargeChecked)
+        return true;
+
+    const QString normalizedMode = modeValue.trimmed();
+
+    if (chargeChecked)
+        return normalizedMode.contains("충전");
+
+    if (dischargeChecked)
+        return normalizedMode.contains("방전");
+
+    return true;
+}
+
+void Log_Analyize::openCSVFolder()
+{
+    const QString folderPath = QFileDialog::getExistingDirectory(
+        nullptr,
+        "CSV 폴더 선택",
+        "");
+
+    if (folderPath.isEmpty())
+        return;
+
+    std::function<void(const QString&)> scanDir = [&](const QString &dirPath) {
+        QDir dir(dirPath);
+        const QFileInfoList csvFiles = dir.entryInfoList(
+            QStringList() << "*.csv", QDir::Files | QDir::NoSymLinks);
+        for (const QFileInfo &fi : csvFiles)
+            addFileToList(fi.absoluteFilePath());
+        const QFileInfoList subDirs = dir.entryInfoList(
+            QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks);
+        for (const QFileInfo &fi : subDirs)
+            scanDir(fi.absoluteFilePath());
+    };
+    scanDir(folderPath);
+    updateListFilter();
+    updateGraph();
 }
 
 
@@ -324,6 +576,7 @@ void Log_Analyize::clearGraph()
 
     selectedFiles.clear();
     fileMap.clear();
+    filterMetaMap.clear();
 
     // 체크 해제
     for (int i = 0; i < ui->File_List->count(); i++)
@@ -342,6 +595,7 @@ void Log_Analyize::loadCSV(const QString &filePath)
     if (!file.open(QIODevice::ReadOnly)) return;
 
     QTextStream in(&file);
+    in.setEncoding(QStringConverter::System);
 
     in.readLine(); // 1
     in.readLine(); // 2
@@ -351,6 +605,7 @@ void Log_Analyize::loadCSV(const QString &filePath)
     int voltIdx = -1;
     int tempIdx = -1;
     int interResIdx = -1;
+    int modeIdx = -1;
     hasInterResValue = false;
     interResMilliOhmValue = 0.0;
 
@@ -368,6 +623,9 @@ void Log_Analyize::loadCSV(const QString &filePath)
 
         if (h.contains("inter") && h.contains("res"))
             interResIdx = i;
+
+        if (h.contains("mode"))
+            modeIdx = i;
     }
 
     if (voltIdx < 0 && tempIdx < 0 && interResIdx < 0) return;
@@ -377,6 +635,16 @@ void Log_Analyize::loadCSV(const QString &filePath)
     while (!in.atEnd())
     {
         const QString line = in.readLine();
+
+        if (modeIdx >= 0)
+        {
+            const QString modeRaw = line.section(",", modeIdx, modeIdx).trimmed();
+            if (!matchesSelectedMode(modeRaw))
+            {
+                ++row;
+                continue;
+            }
+        }
 
         if (voltIdx >= 0)
         {
@@ -534,9 +802,22 @@ void Log_Analyize::updateGraph()
     QBarSeries *interResSeries = new QBarSeries();
     int interResIndex = 0;
 
+    const bool conditionEnabled = ui->CBox_Condition_ONOFF->isChecked();
+    const double targetTemp = static_cast<double>(ui->Temp_Slider->value());
+    const int targetCycle = ui->CbBox_Cycle_Count->currentText().toInt();
+
     for (const QString &name : selectedFiles)
     {
         QString path = fileMap[name];
+
+        if (conditionEnabled)
+        {
+            const FileFilterMeta &meta = getFilterMeta(path);
+            const bool tempMatch = !meta.hasFirstTemp || std::abs(meta.firstTemp - targetTemp) < 1.0;
+            const bool cycleMatch = meta.hasRepeatColumn && meta.repeatTimes.contains(targetCycle);
+            if (!(tempMatch && cycleMatch))
+                continue;
+        }
 
         xData.clear();
         yData.clear();
@@ -609,7 +890,8 @@ void Log_Analyize::updateGraph()
             if (xPad <= 0.0) xPad = 1.0;
             if (yPad <= 0.0) yPad = 0.5;
 
-            logAxisX->setRange(logMinX - xPad, logMaxX + xPad);
+            const double xMin = std::max(0.0, logMinX - xPad);
+            logAxisX->setRange(xMin, logMaxX + xPad);
             logAxisY->setRange(logMinY - yPad, logMaxY + yPad);
         }
         else
@@ -630,7 +912,8 @@ void Log_Analyize::updateGraph()
             if (xPad <= 0.0) xPad = 1.0;
             if (yPad <= 0.0) yPad = 0.5;
 
-            tempAxisX->setRange(tempMinX - xPad, tempMaxX + xPad);
+            const double xMin = std::max(0.0, tempMinX - xPad);
+            tempAxisX->setRange(xMin, tempMaxX + xPad);
             tempAxisY->setRange(tempMinY - yPad, tempMaxY + yPad);
         }
         else

@@ -53,8 +53,18 @@ public:
 
     void init();
     void openCSV();
+    void openCSVFolder();
 
 private:
+    struct FileFilterMeta
+    {
+        bool parsed = false;
+        bool hasFirstTemp = false;
+        double firstTemp = 0.0;
+        bool hasRepeatColumn = false;
+        QSet<int> repeatTimes;
+    };
+
     Ui::Battery_Aging *ui;
 
     QVector<double> xData;
@@ -77,9 +87,13 @@ private:
     void addFileToList(const QString &path);
     void onFileSelected();
     void clearGraph();
-    void updateGraph();   // 🔥 이거 추가
+    void updateGraph();
+    void updateListFilter();
+    const FileFilterMeta &getFilterMeta(const QString &filePath);
+    bool matchesSelectedMode(const QString &modeValue);
 
     QMap<QString, QString> fileMap;   // 파일명 → 전체경로
+    QMap<QString, FileFilterMeta> filterMetaMap;
 
 };
 
