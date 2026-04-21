@@ -59,9 +59,17 @@ private:
 
     QVector<double> xData;
     QVector<double> yData;
+    QVector<double> tempXData;
+    QVector<double> tempYData;
+    bool hasInterResValue = false;
+    double interResMilliOhmValue = 0.0;
 
     QChart *chart = nullptr;
     QChartView *view = nullptr;
+    QChart *tempChart = nullptr;
+    QChartView *tempView = nullptr;
+    QChart *interResChart = nullptr;
+    QChartView *interResView = nullptr;
     QSet<QString> selectedFiles;
 
     void loadCSV(const QString &filePath);

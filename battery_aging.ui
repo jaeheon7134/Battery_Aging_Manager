@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1512</width>
-    <height>1105</height>
+    <width>1788</width>
+    <height>936</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,8 +17,8 @@
    <widget class="QGroupBox" name="groupBox_3">
     <property name="geometry">
      <rect>
-      <x>1140</x>
-      <y>80</y>
+      <x>1370</x>
+      <y>40</y>
       <width>121</width>
       <height>121</height>
      </rect>
@@ -69,10 +69,10 @@
    <widget class="QStackedWidget" name="stackedWidget">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>20</y>
-      <width>1071</width>
-      <height>851</height>
+      <x>50</x>
+      <y>50</y>
+      <width>1271</width>
+      <height>871</height>
      </rect>
     </property>
     <property name="currentIndex">
@@ -82,32 +82,32 @@
      <widget class="QPushButton" name="CSV_Load_Btn">
       <property name="geometry">
        <rect>
-        <x>40</x>
-        <y>40</y>
-        <width>75</width>
+        <x>650</x>
+        <y>540</y>
+        <width>121</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>파일 선택</string>
+       <string>단일 파일 선택</string>
       </property>
      </widget>
      <widget class="QWidget" name="Log_Graph" native="true">
       <property name="geometry">
        <rect>
-        <x>40</x>
-        <y>90</y>
-        <width>811</width>
-        <height>411</height>
+        <x>20</x>
+        <y>120</y>
+        <width>591</width>
+        <height>341</height>
        </rect>
       </property>
      </widget>
      <widget class="QPushButton" name="Graph_Clear_Btn">
       <property name="geometry">
        <rect>
-        <x>130</x>
-        <y>40</y>
-        <width>91</width>
+        <x>780</x>
+        <y>570</y>
+        <width>131</width>
         <height>24</height>
        </rect>
       </property>
@@ -118,14 +118,68 @@
      <widget class="QListWidget" name="File_List">
       <property name="geometry">
        <rect>
-        <x>40</x>
-        <y>530</y>
-        <width>381</width>
-        <height>261</height>
+        <x>640</x>
+        <y>610</y>
+        <width>291</width>
+        <height>211</height>
        </rect>
       </property>
       <property name="selectionMode">
        <enum>QAbstractItemView::SelectionMode::MultiSelection</enum>
+      </property>
+     </widget>
+     <widget class="QLabel" name="Log_Analyize_Title">
+      <property name="geometry">
+       <rect>
+        <x>170</x>
+        <y>20</y>
+        <width>971</width>
+        <height>81</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>30</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>로그 분석</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignmentFlag::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QWidget" name="Temp_Graph" native="true">
+      <property name="geometry">
+       <rect>
+        <x>640</x>
+        <y>120</y>
+        <width>591</width>
+        <height>341</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QWidget" name="InterRes_Graph" native="true">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>480</y>
+        <width>591</width>
+        <height>341</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="CSV_Folder_Load_Btn">
+      <property name="geometry">
+       <rect>
+        <x>650</x>
+        <y>570</y>
+        <width>121</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>폴더 선택</string>
       </property>
      </widget>
     </widget>
@@ -133,8 +187,8 @@
      <widget class="QTextEdit" name="Memo_box">
       <property name="geometry">
        <rect>
-        <x>700</x>
-        <y>490</y>
+        <x>800</x>
+        <y>470</y>
         <width>311</width>
         <height>311</height>
        </rect>
@@ -143,8 +197,8 @@
      <widget class="QGroupBox" name="groupBox">
       <property name="geometry">
        <rect>
-        <x>700</x>
-        <y>360</y>
+        <x>800</x>
+        <y>340</y>
         <width>311</width>
         <height>101</height>
        </rect>
@@ -245,8 +299,8 @@
      <widget class="QCalendarWidget" name="calendarWidget">
       <property name="geometry">
        <rect>
-        <x>40</x>
-        <y>200</y>
+        <x>120</x>
+        <y>210</y>
         <width>631</width>
         <height>601</height>
        </rect>
@@ -271,8 +325,8 @@
      <widget class="QPushButton" name="Memo_Save">
       <property name="geometry">
        <rect>
-        <x>920</x>
-        <y>510</y>
+        <x>1020</x>
+        <y>490</y>
         <width>75</width>
         <height>31</height>
        </rect>
@@ -305,8 +359,8 @@
      <widget class="QGroupBox" name="groupBox_2">
       <property name="geometry">
        <rect>
-        <x>700</x>
-        <y>240</y>
+        <x>800</x>
+        <y>210</y>
         <width>311</width>
         <height>91</height>
        </rect>
@@ -415,7 +469,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1512</width>
+     <width>1788</width>
      <height>22</height>
     </rect>
    </property>

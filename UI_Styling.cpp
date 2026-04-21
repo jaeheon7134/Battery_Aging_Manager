@@ -154,6 +154,14 @@ void UI_Styling::applyStyle(QApplication &app)
             font-size: 40px;
         }
 
+        QLabel#Log_Analyize_Title {
+            background: #990000;
+            color: #ffffff;
+            border: none;
+            font-weight: bold;
+            font-size: 40px;
+        }
+
         QLabel#Current_time,
         QLabel#goal_time {
             background-color: #003366;
