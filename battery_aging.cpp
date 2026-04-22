@@ -2,29 +2,35 @@
 #include "./ui_battery_aging.h"
 #include "UI_Styling.h"
 
+// Qt: Core / IO
 #include <QFile>
-#include <QJsonDocument>
 #include <QDebug>
-#include <QFileDialog>
 #include <QDir>
-#include <QSignalBlocker>
+#include <QFileDialog>
+#include <QJsonDocument>
 #include <QStringConverter>
 #include <QTextStream>
-#include <functional>
-#include <QVBoxLayout>
-#include <QLayout>
-#include <QPainter>
-#include <QFont>
-#include <limits>
-#include <cmath>
 
+// Qt: Widgets / GUI
+#include <QLayout>
+#include <QFont>
+#include <QPainter>
+#include <QSignalBlocker>
+#include <QVBoxLayout>
+
+// Qt Charts
 #include <QtCharts/QChartView>
 #include <QtCharts/QChart>
-#include <QtCharts/QLineSeries>
-#include <QtCharts/QValueAxis>
-#include <QtCharts/QBarSeries>
-#include <QtCharts/QBarSet>
 #include <QtCharts/QBarCategoryAxis>
+#include <QtCharts/QBarSet>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QStackedBarSeries>
+#include <QtCharts/QValueAxis>
+
+// C++ STL
+#include <cmath>
+#include <functional>
+#include <limits>
 
 
 
@@ -51,12 +57,11 @@ protected:
     }
 };
 
-
 // ================= Plan_Page =================
 
 Plan_Page::Plan_Page(Ui::Battery_Aging *ui)
+    : ui(ui)
 {
-    this->ui = ui;
 }
 
 void Plan_Page::init()
@@ -223,135 +228,141 @@ void Plan_Page::updateCurrentTime()
     }
 }
 
-
-// ================= 구현 =================
+// ================= Log Analyze =================
 
 Log_Analyize::Log_Analyize(Ui::Battery_Aging *ui)
+    : ui(ui)
 {
-    this->ui = ui;
 }
 
 void Log_Analyize::init()
 {
+    // UI: 버튼
     QObject::connect(ui->CSV_Load_Btn, &QPushButton::clicked,
-                     [=]() { openCSV(); });
+                     this, &Log_Analyize::openCSV);
 
     QObject::connect(ui->CSV_Folder_Load_Btn, &QPushButton::clicked,
-                     [=]() { openCSVFolder(); });
-
-    QObject::connect(ui->File_List, &QListWidget::itemClicked,
-                     [=](QListWidgetItem *item) {
-
-                         if (item->checkState() == Qt::Checked)
-                             item->setCheckState(Qt::Unchecked);
-                         else
-                             item->setCheckState(Qt::Checked);
-                     });
-
-    QObject::connect(ui->File_List, &QListWidget::itemChanged,
-                     [=](QListWidgetItem *item) {
-
-                         QString name = item->text();
-
-                         if (item->checkState() == Qt::Checked)
-                             selectedFiles.insert(name);
-                         else
-                             selectedFiles.remove(name);
-
-                         updateGraph();
-                     });
+                     this, &Log_Analyize::openCSVFolder);
 
     QObject::connect(ui->Graph_Clear_Btn, &QPushButton::clicked,
-                     [=]() { clearGraph(); });
+                     this, &Log_Analyize::clearGraph);
 
-    // 조건 활성화 체크박스 → groupBox_Log_Condition enable/disable + 리스트 필터
+    // UI: 파일 리스트 동작
+    QObject::connect(ui->File_List, &QListWidget::itemClicked,
+                     this, &Log_Analyize::toggleItemCheck);
+
+    QObject::connect(ui->File_List, &QListWidget::itemChanged,
+                     this, &Log_Analyize::onItemChanged);
+
+    // UI: 조건 적용 ON/OFF
     ui->groupBox_Log_Condition->setEnabled(ui->CBox_Condition_ONOFF->isChecked());
+
     QObject::connect(ui->CBox_Condition_ONOFF, &QCheckBox::toggled,
-                     [=](bool checked) {
-                         ui->groupBox_Log_Condition->setEnabled(checked);
-                         updateListFilter();
-                         updateGraph();
-                     });
+                     this, &Log_Analyize::onConditionToggled);
 
-    // 온도 슬라이더 → label_7 에 현재 값 표시
+    // UI: 온도 슬라이더
     ui->label_7->setText(QString::number(ui->Temp_Slider->value()) + " °C");
+
     QObject::connect(ui->Temp_Slider, &QSlider::valueChanged,
-                     [=](int value) {
-                         ui->label_7->setText(QString::number(value) + " °C");
-                     });
+                     this, &Log_Analyize::onTempChanged);
+
     QObject::connect(ui->Temp_Slider, &QSlider::sliderReleased,
-                     [=]() {
-                         updateListFilter();
-                         updateGraph();
-                     });
+                     this, &Log_Analyize::onTempReleased);
 
+    // UI: 사이클 선택
     QObject::connect(ui->CbBox_Cycle_Count, &QComboBox::currentIndexChanged,
-                     [=](int) {
-                         updateListFilter();
-                         updateGraph();
-                     });
+                     this, &Log_Analyize::onCycleChanged);
 
-    if (!ui->CBox_Charge->isChecked() && !ui->CBox_Discharge->isChecked() && !ui->CBox_All->isChecked())
+    // UI: 모드 체크박스(상호 배타)
+    if (!ui->CBox_Charge->isChecked() &&
+        !ui->CBox_Discharge->isChecked() &&
+        !ui->CBox_All->isChecked())
+    {
         ui->CBox_All->setChecked(true);
+    }
 
     QObject::connect(ui->CBox_Charge, &QCheckBox::toggled,
-                     [=](bool checked) {
-                         QSignalBlocker blockCharge(ui->CBox_Charge);
-                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
-                         QSignalBlocker blockAll(ui->CBox_All);
+                     this, &Log_Analyize::onModeChanged);
 
-                         if (checked)
-                         {
-                             ui->CBox_Discharge->setChecked(false);
-                             ui->CBox_All->setChecked(false);
-                         }
-                         else if (!ui->CBox_Discharge->isChecked())
-                         {
-                             ui->CBox_All->setChecked(true);
-                         }
-
-                         updateGraph();
-                     });
     QObject::connect(ui->CBox_Discharge, &QCheckBox::toggled,
-                     [=](bool checked) {
-                         QSignalBlocker blockCharge(ui->CBox_Charge);
-                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
-                         QSignalBlocker blockAll(ui->CBox_All);
+                     this, &Log_Analyize::onModeChanged);
 
-                         if (checked)
-                         {
-                             ui->CBox_Charge->setChecked(false);
-                             ui->CBox_All->setChecked(false);
-                         }
-                         else if (!ui->CBox_Charge->isChecked())
-                         {
-                             ui->CBox_All->setChecked(true);
-                         }
-
-                         updateGraph();
-                     });
     QObject::connect(ui->CBox_All, &QCheckBox::toggled,
-                     [=](bool checked) {
-                         QSignalBlocker blockCharge(ui->CBox_Charge);
-                         QSignalBlocker blockDischarge(ui->CBox_Discharge);
-                         QSignalBlocker blockAll(ui->CBox_All);
+                     this, &Log_Analyize::onModeChanged);
 
-                         if (checked)
-                         {
-                             ui->CBox_Charge->setChecked(false);
-                             ui->CBox_Discharge->setChecked(false);
-                         }
-                         else if (!ui->CBox_Charge->isChecked() && !ui->CBox_Discharge->isChecked())
-                         {
-                             ui->CBox_All->setChecked(true);
-                         }
+    // 초기 그래프 렌더링
+    updateGraph();
+}
 
-                         updateGraph();
-                     });
+// ----- UI 이벤트 핸들러 -----
+
+void Log_Analyize::toggleItemCheck(QListWidgetItem *item)
+{
+    item->setCheckState(
+        item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+}
+
+void Log_Analyize::onItemChanged(QListWidgetItem *item)
+{
+    const QString name = item->text();
+
+    if (item->checkState() == Qt::Checked)
+        selectedFiles.insert(name);
+    else
+        selectedFiles.remove(name);
 
     updateGraph();
 }
 
+void Log_Analyize::onConditionToggled(bool checked)
+{
+    ui->groupBox_Log_Condition->setEnabled(checked);
+    updateListFilter();
+    updateGraph();
+}
+
+void Log_Analyize::onTempChanged(int value)
+{
+    ui->label_7->setText(QString::number(value) + " °C");
+}
+
+void Log_Analyize::onTempReleased()
+{
+    updateListFilter();
+    updateGraph();
+}
+
+void Log_Analyize::onCycleChanged()
+{
+    updateListFilter();
+    updateGraph();
+}
+
+void Log_Analyize::onModeChanged()
+{
+    QSignalBlocker b1(ui->CBox_Charge);
+    QSignalBlocker b2(ui->CBox_Discharge);
+    QSignalBlocker b3(ui->CBox_All);
+
+    if (ui->CBox_Charge->isChecked())
+    {
+        ui->CBox_Discharge->setChecked(false);
+        ui->CBox_All->setChecked(false);
+    }
+    else if (ui->CBox_Discharge->isChecked())
+    {
+        ui->CBox_Charge->setChecked(false);
+        ui->CBox_All->setChecked(false);
+    }
+    else
+    {
+        ui->CBox_All->setChecked(true);
+    }
+
+    updateGraph();
+}
+
+// ----- 파일 로드 / 리스트 필터 -----
 
 void Log_Analyize::openCSV()
 {
@@ -526,8 +537,6 @@ void Log_Analyize::openCSVFolder()
     updateGraph();
 }
 
-
-
 void Log_Analyize::addFileToList(const QString &path)
 {
     QFileInfo info(path);
@@ -545,26 +554,6 @@ void Log_Analyize::addFileToList(const QString &path)
     ui->File_List->addItem(item);
 }
 
-
-// 🔹 리스트 클릭 → 해당 그래프만 표시
-void Log_Analyize::onFileSelected()
-{
-    QListWidgetItem *item = ui->File_List->currentItem();
-    if (!item) return;
-
-    QString name = item->text();
-    QString path = fileMap[name];
-
-    xData.clear();
-    yData.clear();
-
-    loadCSV(path);
-
-    clearGraph();          // 기존 그래프 제거
-    drawCSVGraph(path);    // 새 그래프
-}
-
-
 void Log_Analyize::clearGraph()
 {
     if (chart)
@@ -578,8 +567,7 @@ void Log_Analyize::clearGraph()
     fileMap.clear();
     filterMetaMap.clear();
 
-    // 체크 해제
-    for (int i = 0; i < ui->File_List->count(); i++)
+    for (int i = 0; i < ui->File_List->count(); ++i)
     {
         QListWidgetItem *item = ui->File_List->item(i);
         item->setCheckState(Qt::Unchecked);
@@ -588,9 +576,13 @@ void Log_Analyize::clearGraph()
     ui->File_List->clear();
 }
 
-// 🔹 CSV 파싱 (total_volt + battery_temp + inter_res 자동 찾기)
+// ----- CSV 파싱 -----
 void Log_Analyize::loadCSV(const QString &filePath)
 {
+
+    interRes.valid = false;
+    interRes.value = 0.0;
+
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return;
 
@@ -606,8 +598,6 @@ void Log_Analyize::loadCSV(const QString &filePath)
     int tempIdx = -1;
     int interResIdx = -1;
     int modeIdx = -1;
-    hasInterResValue = false;
-    interResMilliOhmValue = 0.0;
 
     for (int i = 0; i < parts.size(); ++i)
     {
@@ -675,7 +665,7 @@ void Log_Analyize::loadCSV(const QString &filePath)
             }
         }
 
-        if (interResIdx >= 0 && !hasInterResValue)
+        if (interResIdx >= 0 && !interRes.valid)
         {
             QString interRaw = line.section(",", interResIdx, interResIdx).trimmed();
             interRaw.remove("ohm", Qt::CaseInsensitive);
@@ -685,8 +675,8 @@ void Log_Analyize::loadCSV(const QString &filePath)
             const double interResValue = interRaw.toDouble(&okInterRes);
             if (okInterRes && interResValue != 0.0)
             {
-                hasInterResValue = true;
-                interResMilliOhmValue = interResValue * 1000.0;
+                interRes.valid = true;
+                interRes.value = interResValue * 1000.0;
             }
         }
 
@@ -694,65 +684,27 @@ void Log_Analyize::loadCSV(const QString &filePath)
     }
 
 }
-// 🔹 그래프 업데이트 함수 (핵심)
+
+// ----- 그래프 처리 파이프라인 -----
 
 void Log_Analyize::updateGraph()
 {
+    initCharts();
+    resetCharts();
+    processSelectedFiles();
+    updateAxes();
+}
+
+void Log_Analyize::initCharts()
+{
     if (!chart)
     {
-        chart = new QChart();
-        chart->setTitle("배터리 전압 추이");
-        QFont chartTitleFont;
-        chartTitleFont.setPointSize(15);
-        chartTitleFont.setBold(true);
-        chart->setTitleFont(chartTitleFont);
-        chart->legend()->setAlignment(Qt::AlignBottom);
-
-        QValueAxis *axisX = new QValueAxis;
-        QValueAxis *axisY = new QValueAxis;
-
-        chart->addAxis(axisX, Qt::AlignBottom);
-        chart->addAxis(axisY, Qt::AlignLeft);
-
-        view = new ChartViewEx(chart);
-        view->setRenderHint(QPainter::Antialiasing);
-
-        view->setRubberBand(QChartView::RectangleRubberBand);
-        view->setDragMode(QGraphicsView::ScrollHandDrag);
-
-        QLayout *layout = ui->Log_Graph->layout();
-        if (!layout)
-            layout = new QVBoxLayout(ui->Log_Graph);
-
-        layout->addWidget(view);
+        chart = createChart("배터리 전압 추이", ui->Log_Graph, view);
     }
 
     if (!tempChart)
     {
-        tempChart = new QChart();
-        tempChart->setTitle("배터리 온도 변화");
-        QFont tempTitleFont;
-        tempTitleFont.setPointSize(15);
-        tempTitleFont.setBold(true);
-        tempChart->setTitleFont(tempTitleFont);
-        tempChart->legend()->setAlignment(Qt::AlignBottom);
-
-        QValueAxis *tempAxisX = new QValueAxis;
-        QValueAxis *tempAxisY = new QValueAxis;
-
-        tempChart->addAxis(tempAxisX, Qt::AlignBottom);
-        tempChart->addAxis(tempAxisY, Qt::AlignLeft);
-
-        tempView = new ChartViewEx(tempChart);
-        tempView->setRenderHint(QPainter::Antialiasing);
-        tempView->setRubberBand(QChartView::RectangleRubberBand);
-        tempView->setDragMode(QGraphicsView::ScrollHandDrag);
-
-        QLayout *tempLayout = ui->Temp_Graph->layout();
-        if (!tempLayout)
-            tempLayout = new QVBoxLayout(ui->Temp_Graph);
-
-        tempLayout->addWidget(tempView);
+        tempChart = createChart("배터리 온도 변화", ui->Temp_Graph, tempView);
     }
 
     if (!interResChart)
@@ -765,59 +717,87 @@ void Log_Analyize::updateGraph()
         interResChart->setTitleFont(interResTitleFont);
         interResChart->legend()->setAlignment(Qt::AlignBottom);
 
+        QValueAxis *axisX = new QValueAxis();
+        QValueAxis *axisY = new QValueAxis();
+
+        axisX->setRange(0, 1);
+        axisY->setRange(0, 1);
+
+        interResChart->addAxis(axisX, Qt::AlignBottom);
+        interResChart->addAxis(axisY, Qt::AlignLeft);
+
         interResView = new ChartViewEx(interResChart);
         interResView->setRenderHint(QPainter::Antialiasing);
         interResView->setRubberBand(QChartView::RectangleRubberBand);
         interResView->setDragMode(QGraphicsView::ScrollHandDrag);
 
-        QLayout *interResLayout = ui->InterRes_Graph->layout();
-        if (!interResLayout)
-            interResLayout = new QVBoxLayout(ui->InterRes_Graph);
+        QLayout *layout = ui->InterRes_Graph->layout();
+        if (!layout)
+            layout = new QVBoxLayout(ui->InterRes_Graph);
 
-        interResLayout->addWidget(interResView);
+        layout->addWidget(interResView);
     }
+}
 
-    // 🔥 기존 그래프만 삭제 (layout은 유지)
+QChart* Log_Analyize::createChart(const QString &title, QWidget *parent, QChartView *&outView)
+{
+    QChart *c = new QChart();
+    c->setTitle(title);
+    QFont titleFont;
+    titleFont.setPointSize(15);
+    titleFont.setBold(true);
+    c->setTitleFont(titleFont);
+    c->legend()->setAlignment(Qt::AlignBottom);
+
+    QValueAxis *axisX = new QValueAxis;
+    QValueAxis *axisY = new QValueAxis;
+
+    c->addAxis(axisX, Qt::AlignBottom);
+    c->addAxis(axisY, Qt::AlignLeft);
+
+    outView = new ChartViewEx(c);
+    outView->setRenderHint(QPainter::Antialiasing);
+    outView->setRubberBand(QChartView::RectangleRubberBand);
+    outView->setDragMode(QGraphicsView::ScrollHandDrag);
+
+    QLayout *layout = parent->layout();
+    if (!layout)
+        layout = new QVBoxLayout(parent);
+
+    layout->addWidget(outView);
+
+    return c;
+}
+
+void Log_Analyize::resetCharts()
+{
     chart->removeAllSeries();
     tempChart->removeAllSeries();
     interResChart->removeAllSeries();
-    interResChart->removeAxis(interResChart->axisX());
-    interResChart->removeAxis(interResChart->axisY());
 
-    double logMinX = std::numeric_limits<double>::max();
-    double logMaxX = std::numeric_limits<double>::lowest();
-    double logMinY = std::numeric_limits<double>::max();
-    double logMaxY = std::numeric_limits<double>::lowest();
-    bool hasLogData = false;
+    for (auto axis : interResChart->axes())
+        interResChart->removeAxis(axis);
+}
 
-    double tempMinX = std::numeric_limits<double>::max();
-    double tempMaxX = std::numeric_limits<double>::lowest();
-    double tempMinY = std::numeric_limits<double>::max();
-    double tempMaxY = std::numeric_limits<double>::lowest();
-    bool hasTempData = false;
+void Log_Analyize::processSelectedFiles()
+{
+    QStackedBarSeries *series = new QStackedBarSeries();
+    QVector<QString> interResNames;
+    QVector<double> interResValues;
+    QStringList categories;
+    bool hasInterResData = false;
 
-    double interResMinY = std::numeric_limits<double>::max();
-    double interResMaxY = std::numeric_limits<double>::lowest();
+    QStringList orderedSelected;
+    for (int i = 0; i < ui->File_List->count(); ++i)
+    {
+        QListWidgetItem *item = ui->File_List->item(i);
+        if (selectedFiles.contains(item->text()))
+            orderedSelected << item->text();
+    }
 
-    QBarSeries *interResSeries = new QBarSeries();
-    int interResIndex = 0;
-
-    const bool conditionEnabled = ui->CBox_Condition_ONOFF->isChecked();
-    const double targetTemp = static_cast<double>(ui->Temp_Slider->value());
-    const int targetCycle = ui->CbBox_Cycle_Count->currentText().toInt();
-
-    for (const QString &name : selectedFiles)
+    for (const QString &name : orderedSelected)
     {
         QString path = fileMap[name];
-
-        if (conditionEnabled)
-        {
-            const FileFilterMeta &meta = getFilterMeta(path);
-            const bool tempMatch = !meta.hasFirstTemp || std::abs(meta.firstTemp - targetTemp) < 1.0;
-            const bool cycleMatch = meta.hasRepeatColumn && meta.repeatTimes.contains(targetCycle);
-            if (!(tempMatch && cycleMatch))
-                continue;
-        }
 
         xData.clear();
         yData.clear();
@@ -826,185 +806,133 @@ void Log_Analyize::updateGraph()
 
         loadCSV(path);
 
-        QLineSeries *voltSeries = new QLineSeries();
-        voltSeries->setName(name);
+        addVoltageSeries(name);
+        addTempSeries(name);
 
-        for (int i = 0; i < xData.size(); i++)
+        if (interRes.valid)
         {
-            voltSeries->append(xData[i], yData[i]);
-            hasLogData = true;
-            if (xData[i] < logMinX) logMinX = xData[i];
-            if (xData[i] > logMaxX) logMaxX = xData[i];
-            if (yData[i] < logMinY) logMinY = yData[i];
-            if (yData[i] > logMaxY) logMaxY = yData[i];
-        }
-
-        chart->addSeries(voltSeries);
-
-        for (auto axis : chart->axes(Qt::Horizontal))
-            voltSeries->attachAxis(axis);
-
-        for (auto axis : chart->axes(Qt::Vertical))
-            voltSeries->attachAxis(axis);
-
-        QLineSeries *tempSeries = new QLineSeries();
-        tempSeries->setName(name);
-
-        for (int i = 0; i < tempXData.size(); i++)
-        {
-            tempSeries->append(tempXData[i], tempYData[i]);
-            hasTempData = true;
-            if (tempXData[i] < tempMinX) tempMinX = tempXData[i];
-            if (tempXData[i] > tempMaxX) tempMaxX = tempXData[i];
-            if (tempYData[i] < tempMinY) tempMinY = tempYData[i];
-            if (tempYData[i] > tempMaxY) tempMaxY = tempYData[i];
-        }
-
-        tempChart->addSeries(tempSeries);
-
-        for (auto axis : tempChart->axes(Qt::Horizontal))
-            tempSeries->attachAxis(axis);
-
-        for (auto axis : tempChart->axes(Qt::Vertical))
-            tempSeries->attachAxis(axis);
-
-        if (hasInterResValue)
-        {
-            QBarSet *interResBarSet = new QBarSet(name);
-            *interResBarSet << interResMilliOhmValue;
-            interResSeries->append(interResBarSet);
-            if (interResMilliOhmValue < interResMinY) interResMinY = interResMilliOhmValue;
-            if (interResMilliOhmValue > interResMaxY) interResMaxY = interResMilliOhmValue;
-            interResIndex++;
+            interResNames.append(name);
+            interResValues.append(interRes.value);
+            hasInterResData = true;
         }
     }
 
-    QValueAxis *logAxisX = qobject_cast<QValueAxis *>(chart->axes(Qt::Horizontal).value(0));
-    QValueAxis *logAxisY = qobject_cast<QValueAxis *>(chart->axes(Qt::Vertical).value(0));
-    if (logAxisX && logAxisY)
+    if (hasInterResData)
     {
-        if (hasLogData)
+        for (const QString &name : interResNames)
+            categories << name;
+
+        const int n = interResValues.size();
+        for (int i = 0; i < n; ++i)
         {
-            double xPad = (logMaxX - logMinX) * 0.02;
-            double yPad = (logMaxY - logMinY) * 0.08;
-            if (xPad <= 0.0) xPad = 1.0;
-            if (yPad <= 0.0) yPad = 0.5;
-
-            const double xMin = std::max(0.0, logMinX - xPad);
-            logAxisX->setRange(xMin, logMaxX + xPad);
-            logAxisY->setRange(logMinY - yPad, logMaxY + yPad);
-        }
-        else
-        {
-            logAxisX->setRange(0.0, 1.0);
-            logAxisY->setRange(0.0, 1.0);
-        }
-    }
-
-    QValueAxis *tempAxisX = qobject_cast<QValueAxis *>(tempChart->axes(Qt::Horizontal).value(0));
-    QValueAxis *tempAxisY = qobject_cast<QValueAxis *>(tempChart->axes(Qt::Vertical).value(0));
-    if (tempAxisX && tempAxisY)
-    {
-        if (hasTempData)
-        {
-            double xPad = (tempMaxX - tempMinX) * 0.02;
-            double yPad = (tempMaxY - tempMinY) * 0.08;
-            if (xPad <= 0.0) xPad = 1.0;
-            if (yPad <= 0.0) yPad = 0.5;
-
-            const double xMin = std::max(0.0, tempMinX - xPad);
-            tempAxisX->setRange(xMin, tempMaxX + xPad);
-            tempAxisY->setRange(tempMinY - yPad, tempMaxY + yPad);
-        }
-        else
-        {
-            tempAxisX->setRange(0.0, 1.0);
-            tempAxisY->setRange(0.0, 1.0);
-        }
-    }
-
-    interResChart->addSeries(interResSeries);
-
-    QBarCategoryAxis *interResAxisX = new QBarCategoryAxis();
-    interResAxisX->append(QStringList() << "inter_res");
-
-    QValueAxis *interResAxisY = new QValueAxis();
-    interResAxisY->setTitleText("mΩ");
-    interResAxisY->setLabelFormat("%.2f");
-    if (interResIndex > 0)
-    {
-        const double span = interResMaxY - interResMinY;
-        double yPad = span * 0.03;
-        if (yPad <= 0.0)
-        {
-            double base = interResMaxY;
-            if (base < 0.0) base = -base;
-            yPad = (base > 0.0) ? base * 0.03 : 0.1;
+            QBarSet *set = new QBarSet(interResNames[i]);
+            for (int j = 0; j < n; ++j)
+                *set << ((i == j) ? interResValues[i] : 0.0);
+            series->append(set);
         }
 
-        const double yMin = interResMinY - yPad;
-        const double yMax = interResMaxY + yPad;
-        interResAxisY->setRange(yMin, yMax);
-        interResAxisY->setTickCount(6);
+        drawInterResBar(series, categories, true);
     }
     else
     {
-        interResAxisY->setRange(0.0, 1.0);
-        interResAxisY->setTickCount(6);
+        delete series;
+        drawInterResBar(nullptr, QStringList(), false);
     }
-
-    interResChart->addAxis(interResAxisX, Qt::AlignBottom);
-    interResChart->addAxis(interResAxisY, Qt::AlignLeft);
-    interResSeries->attachAxis(interResAxisX);
-    interResSeries->attachAxis(interResAxisY);
 }
 
 
-// 🔹 그래프 그리기
-void Log_Analyize::drawCSVGraph(const QString &fileName)
+void Log_Analyize::drawInterResBar(QAbstractBarSeries *series, const QStringList &categories, bool hasData)
 {
-    if (!chart)
+    // 기존 axis 제거
+    for (auto axis : interResChart->axes())
+        interResChart->removeAxis(axis);
+
+    if (series)
     {
-        chart = new QChart();
-        chart->setTitle("배터리 전압 추이");
-        QFont chartTitleFont;
-        chartTitleFont.setPointSize(10);
-        chartTitleFont.setBold(true);
-        chart->setTitleFont(chartTitleFont);
-        chart->legend()->setAlignment(Qt::AlignBottom);
-
-        QValueAxis *axisX = new QValueAxis;
-        QValueAxis *axisY = new QValueAxis;
-
-        chart->addAxis(axisX, Qt::AlignBottom);
-        chart->addAxis(axisY, Qt::AlignLeft);
-
-        view = new ChartViewEx(chart);
-        view->setRenderHint(QPainter::Antialiasing);
-
-        view->setRubberBand(QChartView::RectangleRubberBand);
-        view->setDragMode(QGraphicsView::ScrollHandDrag);
-        view->setInteractive(true);
-
-        // 🔥 핵심 수정
-        QLayout *layout = ui->Log_Graph->layout();
-
-        if (!layout)
-        {
-            layout = new QVBoxLayout(ui->Log_Graph);
-        }
-
-        layout->addWidget(view);
+        series->setBarWidth(0.5);
+        interResChart->addSeries(series);
     }
 
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    if (!categories.isEmpty())
+        axisX->append(categories);
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText("mΩ");
+    axisY->setLabelFormat("%.2f");
+
+    if (hasData)
+    {
+        double minY = std::numeric_limits<double>::max();
+        double maxY = std::numeric_limits<double>::lowest();
+        bool found = false;
+
+        for (QBarSet *set : series->barSets())
+        {
+            for (int i = 0; i < set->count(); ++i)
+            {
+                const double v = set->at(i);
+                if (v <= 0.0)
+                    continue;
+                if (v < minY) minY = v;
+                if (v > maxY) maxY = v;
+                found = true;
+            }
+        }
+
+        if (!found)
+        {
+            axisY->setRange(0.0, 1.0);
+        }
+        else
+        {
+            double pad = (maxY - minY) * 0.05;
+            if (pad <= 0.0)
+                pad = (maxY > 0.0) ? maxY * 0.05 : 0.1;
+
+            axisY->setRange(minY - pad, maxY + pad);
+        }
+    }
+    else
+    {
+        axisY->setRange(0.0, 1.0);
+    }
+
+    interResChart->addAxis(axisX, Qt::AlignBottom);
+    interResChart->addAxis(axisY, Qt::AlignLeft);
+
+    if (series)
+    {
+        series->attachAxis(axisX);
+        series->attachAxis(axisY);
+    }
+}
+
+void Log_Analyize::addVoltageSeries(const QString &name)
+{
     QLineSeries *series = new QLineSeries();
+    series->setName(name);
 
-    QFileInfo info(fileName);
-    series->setName(info.fileName());
-
-    for (int i = 0; i < xData.size(); i++)
+    for (int i = 0; i < xData.size(); ++i)
         series->append(xData[i], yData[i]);
 
+    attachSeries(chart, series);
+}
+
+void Log_Analyize::addTempSeries(const QString &name)
+{
+    QLineSeries *series = new QLineSeries();
+    series->setName(name);
+
+    for (int i = 0; i < tempXData.size(); ++i)
+        series->append(tempXData[i], tempYData[i]);
+
+    attachSeries(tempChart, series);
+}
+
+
+void Log_Analyize::attachSeries(QChart *chart, QAbstractSeries *series)
+{
     chart->addSeries(series);
 
     for (auto axis : chart->axes(Qt::Horizontal))
@@ -1014,8 +942,40 @@ void Log_Analyize::drawCSVGraph(const QString &fileName)
         series->attachAxis(axis);
 }
 
+void Log_Analyize::updateAxes()
+{
+    // 전압/온도 그래프 모두 동일한 축 업데이트 로직을 재사용합니다.
+    auto setAxis = [](QChart* chart, const QVector<double>& x, const QVector<double>& y)
+    {
+        QValueAxis *axisX = qobject_cast<QValueAxis *>(chart->axes(Qt::Horizontal).value(0));
+        QValueAxis *axisY = qobject_cast<QValueAxis *>(chart->axes(Qt::Vertical).value(0));
 
+        if (!axisX || !axisY || x.isEmpty() || y.isEmpty())
+        {
+            axisX->setRange(0, 1);
+            axisY->setRange(0, 1);
+            return;
+        }
 
+        double minX = *std::min_element(x.begin(), x.end());
+        double maxX = *std::max_element(x.begin(), x.end());
+
+        double minY = *std::min_element(y.begin(), y.end());
+        double maxY = *std::max_element(y.begin(), y.end());
+
+        double xPad = (maxX - minX) * 0.02;
+        double yPad = (maxY - minY) * 0.08;
+
+        if (xPad == 0) xPad = 1;
+        if (yPad == 0) yPad = 0.5;
+
+        axisX->setRange(std::max(0.0, minX - xPad), maxX + xPad);
+        axisY->setRange(std::max(0.0, minY - yPad), maxY + yPad);
+    };
+
+    setAxis(chart, xData, yData);
+    setAxis(tempChart, tempXData, tempYData);
+}
 
 // ================= Battery_Aging =================
 
