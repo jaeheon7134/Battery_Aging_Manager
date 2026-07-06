@@ -1,2 +1,11 @@
-/build/
-/qtcreator/
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# User request: exclude original Qt source folder and migration prompt
+battery_plan_qt/
+PYSIDE6_MIGRATION_PROMPT.md

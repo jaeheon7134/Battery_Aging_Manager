@@ -1,17 +1,12 @@
-#include "UI_Styling.h"
+from __future__ import annotations
 
-#include <QApplication>
-#include <QGraphicsDropShadowEffect>
-#include <QGroupBox>
-#include <QCalendarWidget>
-#include <QTextEdit>
-#include <QLineEdit>
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QGroupBox, QMainWindow, QTextEdit
 
-// ✅ 스타일 적용 함수
-void UI_Styling::applyStyle(QApplication &app)
-{
-    app.setStyleSheet(R"(
 
+def apply_style(app: QApplication) -> None:
+    app.setStyleSheet(
+        """
         QWidget#centralwidget,
         QWidget#page_3,
         QWidget#page_4,
@@ -47,8 +42,7 @@ void UI_Styling::applyStyle(QApplication &app)
 
         QWidget#page_3 QLabel#Label_Temp_Condition,
         QWidget#page_3 QLabel#Label_Range_Select,
-        QWidget#page_3 QLabel#Label_Cycle_Count
-        {
+        QWidget#page_3 QLabel#Label_Cycle_Count {
             background: #660000;
             color: #ffffff;
             font-size: 16px;
@@ -65,7 +59,6 @@ void UI_Styling::applyStyle(QApplication &app)
         }
 
         QWidget#page_3 QGroupBox#groupBox_Log_Condition {
-            /*border: 2px solid #bf1a1a;*/
             border-radius: 16px;
             margin-top: 14px;
             background: #7d0000;
@@ -172,7 +165,7 @@ void UI_Styling::applyStyle(QApplication &app)
             border-right: 5px solid transparent;
             border-top: 7px solid #ff4d4d;
         }
-        
+
         QWidget#page_4 QLabel {
             background: #660000;
             color: #ffffff;
@@ -194,7 +187,7 @@ void UI_Styling::applyStyle(QApplication &app)
             background-color: #003366;
             color: #ffffff;
             padding: 2px 6px;
-            border : 2px solid #001f4d;
+            border: 2px solid #001f4d;
         }
 
         QWidget#page_4 QLineEdit#Cycle_time,
@@ -202,8 +195,8 @@ void UI_Styling::applyStyle(QApplication &app)
             background-color: #003366;
             color: #ffffff;
             padding: 2px 6px;
-            border : 2px solid #001f4d;
-            font-weight : bold;
+            border: 2px solid #001f4d;
+            font-weight: bold;
         }
 
         QWidget#page_4 QTextEdit#Memo_box {
@@ -307,43 +300,22 @@ void UI_Styling::applyStyle(QApplication &app)
             color: #ffffff;
             background-color: #990000;
         }
+        """
+    )
 
-    )");
-}
 
-#if 1
-// ✅ 그림자 적용 (기존 그대로 유지)
-void UI_Styling::applyShadow(QWidget* parent)
-{
-    // 👉 GroupBox만 적용 (패널 느낌)
-    QList<QGroupBox*> boxes = parent->findChildren<QGroupBox*>();
+def apply_shadow(parent: QMainWindow) -> None:
+    for box in parent.findChildren(QGroupBox):
+        shadow = QGraphicsDropShadowEffect(parent)
+        shadow.setBlurRadius(8)
+        shadow.setOffset(0, 2)
+        shadow.setColor(QColor(0, 0, 0, 120))
+        box.setGraphicsEffect(shadow)
 
-    for (auto box : boxes)
-    {
-        auto shadow = new QGraphicsDropShadowEffect(parent);
-
-        shadow->setBlurRadius(8);
-        shadow->setOffset(0, 2);
-        shadow->setColor(QColor(0, 0, 0, 120));
-
-        box->setGraphicsEffect(shadow);
-    }
-
-    // 👉 메모창만 살짝 강조
-    QList<QTextEdit*> edits = parent->findChildren<QTextEdit*>();
-
-    for (auto edit : edits)
-    {
-        if (edit->objectName() == "Memo_box")
-        {
-            auto shadow = new QGraphicsDropShadowEffect(parent);
-
-            shadow->setBlurRadius(10);
-            shadow->setOffset(0, 2);
-            shadow->setColor(QColor(0, 0, 0, 150));
-
-            edit->setGraphicsEffect(shadow);
-        }
-    }
-}
-#endif
+    for edit in parent.findChildren(QTextEdit):
+        if edit.objectName() == "Memo_box":
+            shadow = QGraphicsDropShadowEffect(parent)
+            shadow.setBlurRadius(10)
+            shadow.setOffset(0, 2)
+            shadow.setColor(QColor(0, 0, 0, 150))
+            edit.setGraphicsEffect(shadow)
